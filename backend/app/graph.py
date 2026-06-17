@@ -4,7 +4,7 @@ from typing import Any, TypedDict
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
-from langgraph.prebuilt import ToolNode, tools_condition
+
 
 from app.config import settings
 from app.llm.prompts import build_prompt
@@ -154,7 +154,7 @@ async def fuse_results(state: GraphState) -> GraphState:
 
 
 async def generate_answer(state: GraphState) -> GraphState:
-    if state["mode"] != "ai_answer" or not state["fused"]:
+    if not state["fused"]:
         return {"answer": None}
 
     model_name = state.get("model") or settings.chat_model
@@ -172,7 +172,7 @@ async def generate_answer(state: GraphState) -> GraphState:
 
 
 async def generate_reasoning(state: GraphState) -> GraphState:
-    if state["mode"] != "ai_answer" or not state["fused"] or not state.get("answer"):
+    if not state["fused"] or not state.get("answer"):
         return {"reasoning_summary": [], "source_notes": [], "limitations": []}
 
     model_name = state.get("model") or settings.chat_model

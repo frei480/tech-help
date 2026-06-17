@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   fetchModels,
   ingest,
-  search,
   status,
   streamSearch,
   type LlmModel,
@@ -19,7 +18,6 @@ type StatusData = { indexed_files: number; indexed_chunks: number } | Record<str
 export default function HomePage() {
   const qc = useQueryClient();
   const [query, setQuery] = useState('');
-  const [mode, setMode] = useState('ai_answer');
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [streamReasoning, setStreamReasoning] = useState<ReasoningSummary | null>(null);
   const [streamingAnswer, setStreamingAnswer] = useState<string | null>(null);
@@ -46,8 +44,8 @@ export default function HomePage() {
   const isDoneEvent = (event: StreamEvent): event is Extract<StreamEvent, { event: 'done' }> => event.event === 'done';
   const isErrorEvent = (event: StreamEvent): event is Extract<StreamEvent, { event: 'error' }> => event.event === 'error';
 
-  const runStreamedSearch = useCallback(
-    async ({ query, mode, model }: { query: string; mode: string; model?: string }) => {
+  const runSearch = useCallback(
+    async ({ query, model }: { query: string; model?: string }) => {
       // Отменяем предыдущий стрим, если он ещё активен
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
@@ -69,7 +67,7 @@ export default function HomePage() {
       };
 
       try {
-        for await (const event of streamSearch(query, mode, model, controller.signal)) {
+        for await (const event of streamSearch(query, 'ai_answer', model, controller.signal)) {
           if (controller.signal.aborted) break;
 
           if (isTraceEvent(event)) {
@@ -110,15 +108,6 @@ export default function HomePage() {
     []
   );
 
-  const runSearch = useCallback(
-    async ({ query, mode, model }: { query: string; mode: string; model?: string }) => {
-      return mode === 'ai_answer'
-        ? runStreamedSearch({ query, mode, model })
-        : search(query, mode, model);
-    },
-    [runStreamedSearch]
-  );
-
   const searchMutation = useMutation({
     mutationFn: runSearch,
   });
@@ -132,9 +121,9 @@ export default function HomePage() {
     (e: React.FormEvent) => {
       e.preventDefault();
       if (!query.trim()) return;
-      searchMutation.mutate({ query: query.trim(), mode, model: selectedModel || undefined });
+      searchMutation.mutate({ query: query.trim(), model: selectedModel || undefined });
     },
-    [query, mode, selectedModel, searchMutation]
+    [query, selectedModel, searchMutation]
   );
 
   const backendOk = !statusError;
@@ -175,36 +164,27 @@ export default function HomePage() {
           placeholder="Ask about documentation..."
           disabled={searchMutation.isPending || !backendOk}
         />
-        <select value={mode} onChange={(e) => setMode(e.target.value)}>
-          <option value="quick_search">Quick search</option>
-          <option value="ai_answer">AI answer</option>
+        <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)}>
+          <option value="">Default ({models.length > 0 ? models[0]?.name ?? '...' : '...'})</option>
+          {models.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.name}
+            </option>
+          ))}
         </select>
-        {mode === 'ai_answer' && (
-          <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)}>
-            <option value="">Default ({models.length > 0 ? models[0]?.name ?? '...' : '...'})</option>
-            {models.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-        )}
         <button type="submit" disabled={searchMutation.isPending || !backendOk}>
           {searchMutation.isPending ? 'Searching...' : 'Search'}
         </button>
       </form>
 
-      {mode === 'ai_answer' && (
-        <section className="result">
-          <ProcessTrace
-            reasoning={streamReasoning}
-            isLoading={searchMutation.isPending}
-            mode={mode}
-            streamingAnswer={streamingAnswer}
-            reasoningTokens={streamReasoningTokens}
-          />
-        </section>
-      )}
+      <section className="result">
+        <ProcessTrace
+          reasoning={streamReasoning}
+          isLoading={searchMutation.isPending}
+          streamingAnswer={streamingAnswer}
+          reasoningTokens={streamReasoningTokens}
+        />
+      </section>
 
       {searchMutation.data && (
         <section className="result">

@@ -3,17 +3,16 @@ import type { ReasoningSummary } from '../api';
 type Props = {
   reasoning: ReasoningSummary | null;
   isLoading: boolean;
-  mode: string;
   streamingAnswer?: string | null;
   reasoningTokens?: string | null;
 };
 
-export default function ProcessTrace({ reasoning, isLoading, mode, streamingAnswer, reasoningTokens }: Props) {
+export default function ProcessTrace({ reasoning, isLoading, streamingAnswer, reasoningTokens }: Props) {
   const summaryItems = reasoning?.reasoning_summary ?? [];
   const sourceNotes = reasoning?.source_notes ?? [];
   const limitations = reasoning?.limitations ?? [];
 
-  const isStreamingActive = isLoading && mode === 'ai_answer';
+  const isStreamingActive = isLoading;
   const hasReasoning = summaryItems.length > 0 || sourceNotes.length > 0 || limitations.length > 0;
 
   return (
@@ -27,7 +26,7 @@ export default function ProcessTrace({ reasoning, isLoading, mode, streamingAnsw
         </details>
       )}
 
-      {mode === 'ai_answer' && hasReasoning && (
+      {hasReasoning && (
         <details className="reasoning" open={false}>
           <summary>
             <h4>Model reasoning</h4>
@@ -81,10 +80,6 @@ export default function ProcessTrace({ reasoning, isLoading, mode, streamingAnsw
             {streamingAnswer}
           </p>
         </article>
-      )}
-
-      {mode === 'quick_search' && (
-        <p className="empty">Reasoning is shown only for AI answer mode.</p>
       )}
     </section>
   );

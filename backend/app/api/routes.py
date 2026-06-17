@@ -236,7 +236,7 @@ async def search_stream(request: SearchRequest) -> StreamingResponse:
             )
 
             # ── 3. Стриминг ответа LLM через openai SDK напрямую ────────────
-            if request.mode == "ai_answer" and fused:
+            if fused:
                 model_name = request.model or settings.chat_model
                 prompt = build_prompt(query, fused, include_reasoning=False)
                 logger.info(

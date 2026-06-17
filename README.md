@@ -93,10 +93,7 @@ docker compose up --build
 
 1. Open http://localhost:90
 2. Click **Run ingestion** to index documentation files from `./docs/`
-3. Enter a query and select mode:
-   - **Quick search** — returns fused chunks only (no LLM call)
-   - **AI answer** — full pipeline with LLM-generated answer + reasoning
-4. Optionally select a specific model from the dropdown
+3. Enter a query and optionally select a specific model from the dropdown
 
 ## Configuration
 
