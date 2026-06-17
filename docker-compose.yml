@@ -1,0 +1,47 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:?Set PIP_INDEX_URL to the local PyPI mirror URL}
+    user: root
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./docs:/app/docs:ro
+      - ./chroma_db:/app/chroma_db
+      - ./backend/tiktoken_cache:/app/tiktoken_cache
+    environment:      
+      - OPENAI_API_BASE_URL=${OPENAI_API_BASE_URL:-http://host.docker.internal:1234/v1}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-lm-studio}      
+      - CHAT_MODEL=${CHAT_MODEL:-qwen/qwen3.6-27b}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-embeddinggemma-300m}
+      - EMBEDDING_DIMENSIONS=${EMBEDDING_DIMENSIONS:-768}
+      - DOCS_ROOT=${DOCS_ROOT:-./docs}
+      - CHROMA_PERSIST_DIR=${CHROMA_PERSIST_DIR:-./chroma_db}
+      - TIKTOKEN_CACHE_DIR=/app/tiktoken_cache
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: >
+      uvicorn app.main:app --host 0.0.0.0 --port 8000 --timeout-graceful-shutdown 300 --timeout-keep-alive 300
+    networks:
+      - tech-help-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+        NPM_CONFIG_REGISTRY: ${NPM_CONFIG_REGISTRY:?Set NPM_CONFIG_REGISTRY to the local npm mirror URL}
+    ports:
+      - "90:80"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000/api
+    networks:
+      - tech-help-network
+
+networks:
+  tech-help-network:
+    driver: bridge
