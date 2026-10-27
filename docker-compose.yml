@@ -12,9 +12,12 @@ services:
       - ./docs:/app/docs:ro
       - ./chroma_db:/app/chroma_db
       - ./backend/tiktoken_cache:/app/tiktoken_cache
-    environment:      
+    environment:
+      - LLM_PROVIDER=${LLM_PROVIDER:-lm_studio}
       - OPENAI_API_BASE_URL=${OPENAI_API_BASE_URL:-http://host.docker.internal:1234/v1}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-lm-studio}      
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-lm-studio}
+      - OPENROUTER_API_BASE_URL=${OPENROUTER_API_BASE_URL:-https://openrouter.ai/api/v1}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - CHAT_MODEL=${CHAT_MODEL:-qwen/qwen3.6-27b}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-embeddinggemma-300m}
       - EMBEDDING_DIMENSIONS=${EMBEDDING_DIMENSIONS:-768}

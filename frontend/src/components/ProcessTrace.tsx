@@ -1,86 +1,40 @@
-import type { ReasoningSummary } from '../api';
+import type { SearchData } from '../api';
 
-type Props = {
-  reasoning: ReasoningSummary | null;
-  isLoading: boolean;
-  streamingAnswer?: string | null;
-  reasoningTokens?: string | null;
-};
+type Props = { data: SearchData };
 
-export default function ProcessTrace({ reasoning, isLoading, streamingAnswer, reasoningTokens }: Props) {
-  const summaryItems = reasoning?.reasoning_summary ?? [];
-  const sourceNotes = reasoning?.source_notes ?? [];
-  const limitations = reasoning?.limitations ?? [];
-
-  const isStreamingActive = isLoading;
-  const hasReasoning = summaryItems.length > 0 || sourceNotes.length > 0 || limitations.length > 0;
+export default function ProcessTrace({ data }: Props) {
+  if (!data.chunks.length) {
+    return <p className="empty">No relevant chunks found.</p>;
+  }
 
   return (
-    <section className="trace-panel">
-      {reasoningTokens && (
-        <details className="reasoning reasoning-raw" open={true}>
-          <summary>
-            <h4>Model reasoning (raw)</h4>
-          </summary>
-          <pre className="reasoning-raw-content">{reasoningTokens}</pre>
-        </details>
-      )}
-
-      {hasReasoning && (
-        <details className="reasoning" open={false}>
-          <summary>
-            <h4>Model reasoning</h4>
-            {isLoading && <span className="badge">running</span>}
-          </summary>
-
-          {summaryItems.length > 0 && (
-            <>
-              <h5>Reasoning summary</h5>
-              <ul>
-                {summaryItems.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </>
-          )}
-          {sourceNotes.length > 0 && (
-            <>
-              <h5>Source notes</h5>
-              <ul>
-                {sourceNotes.map((note, idx) => {
-                  const source = String(note.source ?? 'unknown');
-                  const usedFor = String(note.used_for ?? '');
-                  return (
-                    <li key={`${source}-${idx}`}>
-                      <code>{source}</code>
-                      {usedFor && <span> — {usedFor}</span>}
-                    </li>
-                  );
-                })}
-              </ul>
-            </>
-          )}
-          {limitations.length > 0 && (
-            <>
-              <h5>Limitations</h5>
-              <ul>
-                {limitations.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </>
-          )}
-        </details>
-      )}
-
-      {streamingAnswer && (
-        <article className="reasoning streaming-answer">
-          <h5>{isStreamingActive ? 'Generating answer...' : 'Answer'}</h5>
-          <p className={`streaming-content ${isStreamingActive ? 'streaming-active' : ''}`}>
-            {streamingAnswer}
-          </p>
+    <div>
+      {data.answer && (
+        <article className="answer">
+          <h3>Answer</h3>
+          <p>{data.answer}</p>
         </article>
       )}
-    </section>
+
+      <h3>Sources</h3>
+      <div className="chunks">
+        {data.chunks.map((chunk, idx) => {
+          const meta = chunk.metadata ?? {};
+          const relPath = (meta.rel_path as string) ?? 'unknown';
+          const chunkIndex = (meta.chunk_index as number) ?? 0;
+          return (
+            <details className="chunk" key={idx}>
+              <summary>
+                <code>{relPath}:{chunkIndex}</code>
+                {typeof chunk.score === 'number' && (
+                  <span className="score">score: {chunk.score.toFixed(4)}</span>
+                )}
+              </summary>
+              <pre>{chunk.text}</pre>
+            </details>
+          );
+        })}
+      </div>
+    </div>
   );
 }

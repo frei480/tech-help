@@ -1,4 +1,18 @@
-from typing import Any
+from typing import TypedDict
+
+
+class SearchChunkMetadata(TypedDict):
+    file_path: str
+    rel_path: str
+    chunk_index: int
+    start_token: int
+    end_token: int
+    heading: str
+
+
+class SearchChunk(TypedDict):
+    text: str
+    metadata: SearchChunkMetadata
 
 
 class SearchRequest:
@@ -13,7 +27,7 @@ class SearchResponse:
         query: str,
         mode: str,
         answer: str | None,
-        chunks: list[dict[str, Any]],
+        chunks: list[SearchChunk],
     ) -> None:
         self.query = query
         self.mode = mode

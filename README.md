@@ -97,16 +97,22 @@ docker compose up --build
 
 ## Configuration
 
-All settings via `.env` file (see [`.env.example`](.env.example)):
+All settings via `.env` file (see [`.env.example`](.env.example)). Set
+`LLM_PROVIDER=lm_studio` to use LM Studio, or `LLM_PROVIDER=openrouter` to use OpenRouter.
+For OpenRouter, set `OPENROUTER_API_KEY` and choose a `CHAT_MODEL` and
+`EMBEDDING_MODEL` available from that provider. For LM Studio, set the model names
+to models loaded in LM Studio.
 
 | Variable | Default | Description |
 |---|---|---|
-| `LLM_PROVIDER` | `openrouter` | Provider type |
-| `OPENAI_API_BASE_URL` | `http://localhost:11434/v1` | OpenAI-compatible API base |
-| `OPENAI_API_KEY` | `sk-test` | API key |
-| `CHAT_MODEL` | `openrouter/free` | Model for answer generation |
-| `EMBEDDING_MODEL` | `qwen2.5:7b-instruct` | Model for embeddings |
+| `LLM_PROVIDER` | `lm_studio` | Provider: `lm_studio` or `openrouter` |
+| `OPENAI_API_BASE_URL` | `http://host.docker.internal:1234/v1` | LM Studio API base URL |
+| `OPENAI_API_KEY` | `lm-studio` | LM Studio API key (usually unused) |
+| `OPENROUTER_API_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter API base URL |
+| `OPENROUTER_API_KEY` | — | OpenRouter API key (required for OpenRouter) |
+| `CHAT_MODEL` | `qwen/qwen3.6-27b` | Model for answer generation |
 | `EMBEDDING_DIMENSIONS` | `768` | Embedding vector dimensions |
+| `EMBEDDING_MODEL` | `text-embedding-embeddinggemma-300m` | Model for embeddings |
 | `DOCS_ROOT` | `./docs` | Documentation files directory |
 | `CHROMA_PERSIST_DIR` | `./chroma_db` | ChromaDB persistence directory |
 | `NPM_CONFIG_REGISTRY` | — | npm mirror URL (required for Docker build) |

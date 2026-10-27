@@ -1,0 +1,11 @@
+POST http://localhost:1234/v1/chat/completions
+Content-Type: application/json
+  
+{
+    "model": "nvidia/nemotron-3-nano-4b",
+    "messages": [
+        {"role": "user", "content": "What is your favorite color?"}
+    ],    
+    "stream": true
+}
+

@@ -1,6 +1,10 @@
+import json
+import logging
 import subprocess
 from pathlib import Path
 from typing import NamedTuple
+
+logger = logging.getLogger(__name__)
 
 
 class RipgrepHit(NamedTuple):
@@ -12,7 +16,9 @@ class RipgrepHit(NamedTuple):
     context_after: list[str]
 
 
-def run_ripgrep(query: str, root: Path | None = None, max_results: int | None = None) -> list[RipgrepHit]:
+def run_ripgrep(
+    query: str, root: Path | None = None, max_results: int | None = None
+) -> list[RipgrepHit]:
     from app.config import settings
 
     root = root or settings.docs_root
@@ -20,15 +26,10 @@ def run_ripgrep(query: str, root: Path | None = None, max_results: int | None = 
 
     cmd = [
         "rg",
-        "--line-number",
-        "--no-heading",
-        "--no-filename",
-        "--context",
-        "2",
-        "--max-columns",
-        "300",
+        "--json",
         "-m",
         str(max_results),
+        "--",
         query,
         str(root),
     ]
@@ -38,6 +39,7 @@ def run_ripgrep(query: str, root: Path | None = None, max_results: int | None = 
             cmd,
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=False,
         )
     except FileNotFoundError as exc:
@@ -50,16 +52,27 @@ def run_ripgrep(query: str, root: Path | None = None, max_results: int | None = 
         raise RuntimeError(f"rg failed: {proc.stderr}")
 
     for line in proc.stdout.splitlines():
-        parts = line.split(":", 2)
-        if len(parts) < 3:
+        event = json.loads(line)
+        if event["type"] != "match":
             continue
-        file_str, line_no_str, content = parts
+
+        data = event["data"]
+        file_path = Path(data["path"]["text"])
+        line_number = data["line_number"]
+        snippet = data["lines"]["text"].strip()
+        rel_path = str(file_path.relative_to(root))
+        logger.debug(
+            "run_ripgrep: parsed match | file_path=%r | line_number=%r | snippet=%r",
+            file_path,
+            line_number,
+            snippet,
+        )
         hits.append(
             RipgrepHit(
-                file_path=Path(file_str),
-                rel_path=str(Path(file_str).relative_to(root)),
-                line_number=int(line_no_str),
-                snippet=content.strip(),
+                file_path=file_path,
+                rel_path=rel_path,
+                line_number=line_number,
+                snippet=snippet,
                 context_before=[],
                 context_after=[],
             )

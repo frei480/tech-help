@@ -12,19 +12,9 @@ import json
 import logging
 from functools import lru_cache
 
-from langchain_openai import ChatOpenAI
-
-from app.config import settings
+from app.llm.client import get_chat_model
 
 logger = logging.getLogger(__name__)
-
-_extractor_llm = ChatOpenAI(
-    base_url=settings.openai_api_base_url,
-    api_key=settings.openai_api_key,
-    model=settings.chat_model,
-    temperature=0.1,
-    timeout=30.0,
-)
 
 EXTRACTION_PROMPT = """\
 You are analyzing technical documentation fragments about T-FLEX DOCs (a PLM/PDM system).
@@ -66,7 +56,9 @@ def extract_keywords(chunks: list[dict], max_chars: int = 3000) -> list[str]:
 
     try:
         prompt = EXTRACTION_PROMPT.format(fragments=text)
-        result = _extractor_llm.invoke([{"role": "user", "content": prompt}])
+        result = get_chat_model(temperature=0.1).invoke(
+            [{"role": "user", "content": prompt}]
+        )
         raw = str(result.content).strip()
 
         start = raw.find("[")

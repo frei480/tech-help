@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -14,7 +15,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    llm_provider: str = "openai"
+    llm_provider: Literal["lm_studio", "openrouter"] = "lm_studio"
     openai_api_base_url: str = "http://localhost:1234/v1"
     openai_api_key: str = "lm-studio"
     openrouter_api_base_url: str = "https://openrouter.ai/api/v1"
@@ -39,6 +40,18 @@ class Settings(BaseSettings):
     @property
     def chroma_collection_name(self) -> str:
         return "docs_chunks"
+
+    @property
+    def llm_api_base_url(self) -> str:
+        if self.llm_provider == "openrouter":
+            return self.openrouter_api_base_url
+        return self.openai_api_base_url
+
+    @property
+    def llm_api_key(self) -> str:
+        if self.llm_provider == "openrouter":
+            return self.openrouter_api_key
+        return self.openai_api_key
 
 
 settings = Settings()

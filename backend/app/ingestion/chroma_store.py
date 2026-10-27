@@ -24,9 +24,9 @@ class ChromaStore:
         import httpx
 
         response = httpx.post(
-            f"{settings.openai_api_base_url}/embeddings",
+            f"{settings.llm_api_base_url}/embeddings",
             headers={
-                "Authorization": f"Bearer {settings.openai_api_key}",
+                "Authorization": f"Bearer {settings.llm_api_key}",
                 "Content-Type": "application/json",
             },
             json={

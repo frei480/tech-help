@@ -99,6 +99,100 @@ button:disabled {
   cursor: not-allowed;
 }
 
+.settings-trigger {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  font-size: 20px;
+}
+
+.settings-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 65%);
+}
+
+.settings-panel {
+  width: min(100%, 440px);
+  padding: 20px;
+  background: #16181f;
+  border: 1px solid #353945;
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgb(0 0 0 / 45%);
+}
+
+.settings-header,
+.settings-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-header {
+  margin-bottom: 20px;
+}
+
+.settings-header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.settings-close {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  font-size: 22px;
+}
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settings-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #b6bac2;
+  font-size: 13px;
+}
+
+.settings-form select {
+  width: 100%;
+  padding: 10px 12px;
+  color: #e6e8eb;
+  background: #1c1f26;
+  border: 1px solid #353945;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.settings-help,
+.settings-error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.settings-help {
+  color: #8a93a6;
+}
+
+.settings-error {
+  color: #f87171;
+}
+
+.settings-actions {
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
 .result {
   margin-top: 12px;
 }
@@ -109,6 +203,11 @@ button:disabled {
   border-radius: 12px;
   padding: 16px;
   margin-bottom: 20px;
+}
+
+.answer.streaming {
+  background: #1a2029;
+  border-color: #3a6fff;
 }
 
 .answer h3 {
@@ -171,12 +270,34 @@ button:disabled {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.trace-panel:not([open]) > .trace-header {
+  margin-bottom: 0;
+}
+
+.trace-header::-webkit-details-marker {
+  display: none;
+}
+
+.trace-header::before {
+  content: '▶';
+  color: #6f7788;
+  font-size: 10px;
+  transition: transform 0.15s ease;
+}
+
+.trace-panel[open] > .trace-header::before {
+  transform: rotate(90deg);
 }
 
 .trace-header h3 {
   margin: 0;
   font-size: 14px;
   color: #b6bac2;
+  flex: 1;
 }
 
 .trace-list {
@@ -375,11 +496,103 @@ button:disabled {
   animation: blink 1s infinite;
 }
 
+/* Streaming reasoning (chain-of-thought) section */
+.reasoning.streaming {
+  background: #1a1a2e;
+  border-color: #8b5cf6;
+}
+
+.reasoning.streaming h3 {
+  color: #a78bfa;
+}
+
+.reasoning.streaming .streaming-content {
+  color: #c4b5fd;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.reasoning.streaming .streaming-content.streaming-active::after {
+  background: #8b5cf6;
+}
+
 @keyframes blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
 }
 
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 .empty {
   color: #8a93a6;
+}
+
+/* ─── Trace panel enhancements ─────────────────────────────────────────────── */
+
+.trace-count {
+  color: #6f7788;
+  font-size: 12px;
+}
+
+.trace-status-badge {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #23262f;
+}
+
+.trace-running {
+  border-color: #3861fb;
+}
+
+.trace-running .trace-status-badge {
+  background: #1a2744;
+  color: #5b96ff;
+  animation: pulse 1.5s infinite;
+}
+
+.trace-running .trace-main strong {
+  color: #5b96ff;
+}
+
+.trace-completed {
+  border-color: #2f8f62;
+}
+
+.trace-completed .trace-status-badge {
+  background: #1a2e22;
+  color: #4ade80;
+}
+
+.trace-completed .trace-main strong {
+  color: #4ade80;
+}
+
+.trace-skipped {
+  border-color: #6f7788;
+  opacity: 0.7;
+}
+
+.trace-skipped .trace-status-badge {
+  background: #23262f;
+  color: #8a93a6;
+}
+
+.trace-stat {
+  display: inline-block;
+  background: #1c1f26;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #8a93a6;
+}
+
+.trace-note {
+  color: #f59e0b;
+  font-style: italic;
 }

@@ -8,7 +8,6 @@ that very large files do not blow through the context window.
 
 import os
 from pathlib import Path
-from typing import Any
 
 import tiktoken
 from langchain_core.tools import tool

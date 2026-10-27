@@ -2,44 +2,47 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api
 
 const FETCH_TIMEOUT = 300000; // 5 minutes
 
-export type TraceEvent = {
-  type: string;
-  step: string;
-  status: string;
-  message: string;
-  details?: Record<string, unknown>;
-  duration_ms?: number;
-  created_at?: string;
-};
-
-export type ReasoningSummary = {
-  reasoning_summary?: string[];
-  source_notes?: Array<Record<string, unknown>>;
-  limitations?: string[];
-};
-
 export type SearchData = {
   query?: string;
   mode?: string;
   model?: string;
   answer: string | null;
+  reasoning_content?: string | null;
   chunks: Array<{
     text?: string;
     metadata?: Record<string, unknown>;
     score?: number;
   }>;
-  trace?: TraceEvent[];
-  reasoning_summary?: string[];
-  source_notes?: Array<Record<string, unknown>>;
-  limitations?: string[];
+};
+
+/** Data payload for a node_start event — emitted when a graph node begins. */
+export type NodeStartData = {
+  node: string;
+  query?: string;
+  variants?: string[];
+  keywords?: string[];
+};
+
+/** Data payload for a node_result event — emitted when a graph node completes. */
+export type NodeResultData = {
+  node: string;
+  hits_count?: number;
+  hits?: Array<{
+    rel_path: string;
+    line_number?: number;
+    score?: number;
+    snippet_preview?: string;
+  }>;
+  keywords?: string[];
+  fused_count?: number;
+  note?: string;
 };
 
 export type StreamEvent =
-  | { event: 'trace'; data: TraceEvent }
   | { event: 'token'; data: { token: string } }
   | { event: 'reasoning_token'; data: { token: string } }
-  | { event: 'answer'; data: { answer: string } }
-  | { event: 'reasoning'; data: ReasoningSummary }
+  | { event: 'node_start'; data: NodeStartData }
+  | { event: 'node_result'; data: NodeResultData }
   | { event: 'done'; data: SearchData }
   | { event: 'error'; data: { message: string } };
 
@@ -48,11 +51,42 @@ export type LlmModel = {
   name: string;
 };
 
-export async function fetchModels(): Promise<LlmModel[]> {
-  const res = await fetch(`${API_BASE}/llm/models`);
+export type LlmProvider = 'lm_studio' | 'openrouter';
+
+export type LlmSettings = {
+  provider: LlmProvider;
+  chat_model: string;
+  embedding_model: string;
+};
+
+export async function fetchModels(provider?: LlmProvider): Promise<LlmModel[]> {
+  const search = provider ? `?provider=${encodeURIComponent(provider)}` : '';
+  const res = await fetch(`${API_BASE}/llm/models${search}`);
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
     throw new Error(`Failed to fetch models: ${res.status} ${text}`);
+  }
+  return res.json();
+}
+
+export async function fetchLlmSettings(): Promise<LlmSettings> {
+  const res = await fetch(`${API_BASE}/llm/settings`);
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(`Failed to fetch LLM settings: ${res.status} ${text}`);
+  }
+  return res.json();
+}
+
+export async function updateLlmSettings(settings: LlmSettings): Promise<LlmSettings> {
+  const res = await fetch(`${API_BASE}/llm/settings`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(`Failed to update LLM settings: ${res.status} ${text}`);
   }
   return res.json();
 }

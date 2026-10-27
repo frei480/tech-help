@@ -1,2 +1,18 @@
-export { fetchModels, search, streamSearch, ingest, status } from './client';
-export type { LlmModel, ReasoningSummary, SearchData, StreamEvent, TraceEvent } from './client';
+export {
+  fetchModels,
+  fetchLlmSettings,
+  updateLlmSettings,
+  search,
+  streamSearch,
+  ingest,
+  status,
+} from './client';
+export type {
+  LlmModel,
+  LlmProvider,
+  LlmSettings,
+  SearchData,
+  StreamEvent,
+  NodeStartData,
+  NodeResultData,
+} from './client';
