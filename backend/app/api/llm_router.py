@@ -1,7 +1,8 @@
 import logging
 from typing import Literal
 
-from fastapi import APIRouter
+import httpx
+from fastapi import APIRouter, HTTPException
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
@@ -87,3 +88,48 @@ async def list_models(
         )
         # Fallback: return the single configured model
         return [{"id": settings.chat_model, "name": settings.chat_model}]
+
+
+@router.get("/embedding-models")
+async def list_embedding_models(
+    provider: Literal["lm_studio", "openrouter"] | None = None,
+) -> list[dict[str, str]]:
+    selected_provider = provider or settings.llm_provider
+    if selected_provider == "lm_studio":
+        return await list_models(provider="lm_studio")
+
+    headers = {}
+    if settings.openrouter_api_key:
+        headers["Authorization"] = f"Bearer {settings.openrouter_api_key}"
+
+    url = f"{settings.openrouter_api_base_url.rstrip('/')}/embeddings/models"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url, headers=headers)
+            response.raise_for_status()
+            payload = response.json()
+    except httpx.HTTPError as exc:
+        logger.warning("Failed to fetch OpenRouter embedding models from %s: %s", url, exc)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to fetch OpenRouter embedding models: {exc}",
+        ) from exc
+    except ValueError as exc:
+        logger.warning("Invalid JSON returned by OpenRouter embedding model endpoint: %s", exc)
+        raise HTTPException(
+            status_code=502,
+            detail="OpenRouter returned an invalid embedding models response",
+        ) from exc
+
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(data, list):
+        raise HTTPException(
+            status_code=502,
+            detail="OpenRouter returned an invalid embedding models response",
+        )
+
+    return [
+        {"id": model["id"], "name": model.get("name") or model["id"]}
+        for model in data
+        if isinstance(model, dict) and isinstance(model.get("id"), str) and model["id"]
+    ]

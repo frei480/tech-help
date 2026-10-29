@@ -4,6 +4,7 @@ from typing import Any
 
 import chromadb
 from chromadb.config import Settings as ChromaSettings
+from chromadb.errors import InvalidArgumentError
 
 from app.config import settings
 from app.ingestion.chunker import Chunk
@@ -15,25 +16,61 @@ class ChromaStore:
             path=str(settings.chroma_persist_dir),
             settings=ChromaSettings(anonymized_telemetry=False),
         )
-        self.collection = self.client.get_or_create_collection(
+        self.collection = self._get_or_create_collection()
+
+    def _get_or_create_collection(self):
+        return self.client.get_or_create_collection(
             name=settings.chroma_collection_name,
             metadata={"hnsw:space": "cosine"},
         )
+
+    def _reset_collection(self) -> None:
+        try:
+            self.client.delete_collection(name=settings.chroma_collection_name)
+        except ValueError:
+            pass
+        self.collection = self._get_or_create_collection()
+
+    def _add_with_collection_reset(self, **kwargs: Any) -> None:
+        try:
+            self.collection.add(**kwargs)
+        except InvalidArgumentError as exc:
+            message = str(exc)
+            if "dimension" not in message.lower():
+                raise
+            self._reset_collection()
+            self.collection.add(**kwargs)
+
+    def _query_with_collection_reset(self, **kwargs: Any) -> dict[str, Any]:
+        try:
+            return self.collection.query(**kwargs)
+        except InvalidArgumentError as exc:
+            message = str(exc)
+            if "dimension" not in message.lower():
+                raise
+            self._reset_collection()
+            return self.collection.query(**kwargs)
+
+    def _build_embedding_headers(self) -> dict[str, str]:
+        headers = {"Content-Type": "application/json"}
+        api_key = settings.llm_api_key.strip()
+        if api_key:
+            headers["Authorization"] = "Bearer " + api_key
+        return headers
+
+    def _build_embedding_payload(self, texts: list[str]) -> dict[str, Any]:
+        return {
+            "model": settings.embedding_model,
+            "input": texts,
+        }
 
     def _embed_texts(self, texts: list[str]) -> list[list[float]]:
         import httpx
 
         response = httpx.post(
             f"{settings.llm_api_base_url}/embeddings",
-            headers={
-                "Authorization": f"Bearer {settings.llm_api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": settings.embedding_model,
-                "input": texts,
-                "dimensions": settings.embedding_dimensions,
-            },
+            headers=self._build_embedding_headers(),
+            json=self._build_embedding_payload(texts),
             timeout=60.0,
         )
         response.raise_for_status()
@@ -59,7 +96,7 @@ class ChromaStore:
             for c in chunks
         ]
 
-        self.collection.add(
+        self._add_with_collection_reset(
             ids=ids,
             embeddings=embeddings,
             documents=texts,
@@ -70,7 +107,7 @@ class ChromaStore:
     def search(self, query: str, top_k: int | None = None) -> list[dict[str, Any]]:
         top_k = top_k or settings.fusion_top_k
         query_embedding = self._embed_texts([query])[0]
-        results = self.collection.query(
+        results = self._query_with_collection_reset(
             query_embeddings=[query_embedding],
             n_results=top_k,
             include=["documents", "metadatas", "distances"],

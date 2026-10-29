@@ -20,7 +20,6 @@ services:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - CHAT_MODEL=${CHAT_MODEL:-qwen/qwen3.6-27b}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-embeddinggemma-300m}
-      - EMBEDDING_DIMENSIONS=${EMBEDDING_DIMENSIONS:-768}
       - DOCS_ROOT=${DOCS_ROOT:-./docs}
       - CHROMA_PERSIST_DIR=${CHROMA_PERSIST_DIR:-./chroma_db}
       - TIKTOKEN_CACHE_DIR=/app/tiktoken_cache

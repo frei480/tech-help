@@ -22,7 +22,6 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
     chat_model: str = "qwen/qwen3.6-27b"
     embedding_model: str = "text-embedding-embeddinggemma-300m"
-    embedding_dimensions: int = 512
     tiktoken_cache_dir: Path = DEFAULT_TIKTOKEN_CACHE_DIR
 
     docs_root: Path = Path("./docs")
