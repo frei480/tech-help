@@ -1,4 +1,5 @@
 import type { SearchData } from '../api';
+import MarkdownContent from './MarkdownContent';
 
 type Props = { data: SearchData };
 
@@ -12,7 +13,7 @@ export default function ProcessTrace({ data }: Props) {
       {data.answer && (
         <article className="answer">
           <h3>Answer</h3>
-          <p>{data.answer}</p>
+          <MarkdownContent content={data.answer} />
         </article>
       )}
 

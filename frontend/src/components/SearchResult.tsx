@@ -1,3 +1,5 @@
+import MarkdownContent from './MarkdownContent';
+
 type SearchData = {
   answer: string | null;
   chunks: Array<{
@@ -15,7 +17,7 @@ export default function SearchResult({ data }: Props) {
       {data.answer && (
         <article className="answer">
           <h3>Answer</h3>
-          <p>{data.answer}</p>
+          <MarkdownContent content={data.answer} />
         </article>
       )}
 

@@ -215,6 +215,71 @@ button:disabled {
   color: #b6bac2;
 }
 
+.markdown-content > :first-child {
+  margin-top: 0;
+}
+
+.markdown-content > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-content p,
+.markdown-content ul,
+.markdown-content ol,
+.markdown-content blockquote,
+.markdown-content pre,
+.markdown-content table {
+  margin: 0 0 12px;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  padding-left: 24px;
+}
+
+.markdown-content code {
+  padding: 2px 6px;
+  background: #23262f;
+  border-radius: 6px;
+  font-size: 0.9em;
+}
+
+.markdown-content pre {
+  overflow-x: auto;
+  padding: 12px;
+  background: #0f1115;
+  border-radius: 8px;
+}
+
+.markdown-content pre code {
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+}
+
+.markdown-content blockquote {
+  padding-left: 12px;
+  border-left: 3px solid #353945;
+  color: #b6bac2;
+}
+
+.markdown-content table {
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.markdown-content th,
+.markdown-content td {
+  padding: 6px 10px;
+  border: 1px solid #353945;
+  text-align: left;
+}
+
+.markdown-content a {
+  color: #7da2ff;
+}
+
 .chunks {
   display: flex;
   flex-direction: column;
@@ -446,7 +511,6 @@ button:disabled {
   color: #d8dbe2;
   font-size: 13px;
   margin: 0;
-  white-space: pre-wrap;
   min-height: 20px;
 }
 

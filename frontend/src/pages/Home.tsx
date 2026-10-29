@@ -14,6 +14,7 @@ import {
   type StatusData,
 } from '../api';
 import SearchResult from '../components/SearchResult';
+import MarkdownContent from '../components/MarkdownContent';
 import SettingsPanel from '../components/SettingsPanel';
 
 /** A single trace entry for the processing pipeline display. */
@@ -259,7 +260,7 @@ export default function HomePage() {
         <section className="result">
           <article className="answer streaming">
             <h3>Answer</h3>
-            <p className="streaming-content streaming-active">{streamingTokens}</p>
+            <MarkdownContent content={streamingTokens} className="streaming-content streaming-active" />
           </article>
         </section>
       )}
