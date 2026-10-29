@@ -53,7 +53,6 @@ body {
 }
 
 .search-bar input,
-.search-bar select,
 .search-bar button,
 .trace-toggle {
   background: #1c1f26;
@@ -434,40 +433,6 @@ button:disabled {
   margin-bottom: 6px;
 }
 
-.reasoning code {
-  background: #23262f;
-  padding: 2px 6px;
-  border-radius: 6px;
-  font-size: 12px;
-}
-
-.reasoning-raw {
-  border-color: #8b5cf6;
-  margin-top: 0;
-  margin-bottom: 16px;
-}
-
-.reasoning-raw summary {
-  background: #1e1428;
-}
-
-.reasoning-raw summary h4 {
-  color: #a78bfa;
-}
-
-.reasoning-raw-content {
-  background: #0f1115;
-  color: #c4b5fd;
-  font-size: 12px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-  margin: 0;
-  padding: 12px 14px;
-  max-height: 300px;
-  overflow-y: auto;
-}
-
 .streaming-answer {
   background: #1a2029;
   border-color: #3a6fff;
@@ -494,26 +459,6 @@ button:disabled {
   margin-left: 2px;
   vertical-align: middle;
   animation: blink 1s infinite;
-}
-
-/* Streaming reasoning (chain-of-thought) section */
-.reasoning.streaming {
-  background: #1a1a2e;
-  border-color: #8b5cf6;
-}
-
-.reasoning.streaming h3 {
-  color: #a78bfa;
-}
-
-.reasoning.streaming .streaming-content {
-  color: #c4b5fd;
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.reasoning.streaming .streaming-content.streaming-active::after {
-  background: #8b5cf6;
 }
 
 @keyframes blink {

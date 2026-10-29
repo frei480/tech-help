@@ -1,6 +1,7 @@
 import json
 import logging
 import sys
+from threading import Lock
 from typing import Any, AsyncGenerator
 
 from fastapi import FastAPI, HTTPException
@@ -57,6 +58,7 @@ class IngestResponse(BaseModel):
 class StatusResponse(BaseModel):
     indexed_files: int
     indexed_chunks: int
+    is_indexing: bool
 
 
 def _sse(event: str, data: dict[str, Any]) -> str:
@@ -64,15 +66,23 @@ def _sse(event: str, data: dict[str, Any]) -> str:
 
 
 logger = logging.getLogger(__name__)
+_ingest_state_lock = Lock()
+_is_ingesting = False
 
 
 @app.get("/api/status", response_model=StatusResponse)
-async def status() -> StatusResponse:
+def status() -> StatusResponse:
     store = ChromaStore()
     files = len(
         {m.get("rel_path") for m in store.collection.get(include=["metadatas"])["metadatas"]}
     )
-    return StatusResponse(indexed_files=files, indexed_chunks=store.count())
+    with _ingest_state_lock:
+        is_indexing = _is_ingesting
+    return StatusResponse(
+        indexed_files=files,
+        indexed_chunks=store.count(),
+        is_indexing=is_indexing,
+    )
 
 
 @app.get("/api/files")
@@ -98,16 +108,27 @@ async def get_chunks(file: str) -> list[dict]:
 
 
 @app.post("/api/ingest", response_model=IngestResponse)
-async def ingest() -> IngestResponse:
-    files = scan_docs()
-    store = ChromaStore()
-    total_chunks = 0
-    for file_path in files:
-        rel = str(file_path.relative_to(settings.docs_root))
-        store.delete_by_file(rel)
-        text = file_path.read_text(encoding="utf-8", errors="ignore")
-        total_chunks += store.index_chunks(chunk_text(text, file_path, rel))
-    return IngestResponse(indexed_files=len(files), indexed_chunks=total_chunks)
+def ingest() -> IngestResponse:
+    global _is_ingesting
+
+    with _ingest_state_lock:
+        if _is_ingesting:
+            raise HTTPException(status_code=409, detail="Ingestion is already running")
+        _is_ingesting = True
+
+    try:
+        files = scan_docs()
+        store = ChromaStore()
+        total_chunks = 0
+        for file_path in files:
+            rel = str(file_path.relative_to(settings.docs_root))
+            store.delete_by_file(rel)
+            text = file_path.read_text(encoding="utf-8", errors="ignore")
+            total_chunks += store.index_chunks(chunk_text(text, file_path, rel))
+        return IngestResponse(indexed_files=len(files), indexed_chunks=total_chunks)
+    finally:
+        with _ingest_state_lock:
+            _is_ingesting = False
 
 
 @app.post("/api/search")
@@ -153,12 +174,10 @@ async def search_stream(request: SearchRequest) -> StreamingResponse:
             final_state: dict[str, Any] = {}
 
             # We use stream_mode=["custom", "updates"] because the generate_answer
-            # node uses the OpenAI client directly (not LangChain's ChatOpenAI) to
-            # properly capture vendor-specific delta fields like reasoning_content.
+            # node streams answer tokens directly via StreamWriter.
             #
             # The generate_answer node emits custom events via StreamWriter:
             #   ("token", "some text")       — regular content tokens
-            #   ("reasoning_token", "some")  — reasoning content tokens
             #
             # All other nodes now also emit custom events:
             #   ("node_start", {...})   — when a node begins execution
@@ -167,8 +186,8 @@ async def search_stream(request: SearchRequest) -> StreamingResponse:
             # These are received here as event_type="custom" events and forwarded
             # to the client as SSE events in real-time.
             #
-            # The final state (with complete answer, reasoning_content, and chunks)
-            # is received via event_type="updates" and sent as a "done" event.
+            # The final state (with the complete answer and chunks) is received
+            # via event_type="updates" and sent as a "done" event.
             async for event_type, payload in graph_app.astream(
                 initial_state,
                 stream_mode=["custom", "updates"],
@@ -178,8 +197,6 @@ async def search_stream(request: SearchRequest) -> StreamingResponse:
                     event_name, data = payload
                     if event_name == "token":
                         yield _sse("token", {"token": data})
-                    elif event_name == "reasoning_token":
-                        yield _sse("reasoning_token", {"token": data})
                     elif event_name == "node_start":
                         yield _sse("node_start", data)
                     elif event_name == "node_result":
@@ -196,7 +213,6 @@ async def search_stream(request: SearchRequest) -> StreamingResponse:
                         "query": request.query,
                         "mode": request.mode,
                         "answer": final_state.get("answer"),
-                        "reasoning_content": final_state.get("reasoning_content"),
                         "chunks": [
                             {
                                 "text": i.get("text"),

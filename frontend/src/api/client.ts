@@ -7,7 +7,6 @@ export type SearchData = {
   mode?: string;
   model?: string;
   answer: string | null;
-  reasoning_content?: string | null;
   chunks: Array<{
     text?: string;
     metadata?: Record<string, unknown>;
@@ -40,7 +39,6 @@ export type NodeResultData = {
 
 export type StreamEvent =
   | { event: 'token'; data: { token: string } }
-  | { event: 'reasoning_token'; data: { token: string } }
   | { event: 'node_start'; data: NodeStartData }
   | { event: 'node_result'; data: NodeResultData }
   | { event: 'done'; data: SearchData }
@@ -59,12 +57,28 @@ export type LlmSettings = {
   embedding_model: string;
 };
 
+export type StatusData = {
+  indexed_files: number;
+  indexed_chunks: number;
+  is_indexing: boolean;
+};
+
 export async function fetchModels(provider?: LlmProvider): Promise<LlmModel[]> {
   const search = provider ? `?provider=${encodeURIComponent(provider)}` : '';
   const res = await fetch(`${API_BASE}/llm/models${search}`);
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
     throw new Error(`Failed to fetch models: ${res.status} ${text}`);
+  }
+  return res.json();
+}
+
+export async function fetchEmbeddingModels(provider?: LlmProvider): Promise<LlmModel[]> {
+  const search = provider ? `?provider=${encodeURIComponent(provider)}` : '';
+  const res = await fetch(`${API_BASE}/llm/embedding-models${search}`);
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(`Failed to fetch embedding models: ${res.status} ${text}`);
   }
   return res.json();
 }
@@ -211,7 +225,7 @@ export async function ingest() {
   return res.json();
 }
 
-export async function status() {
+export async function status(): Promise<StatusData> {
   const res = await fetch(`${API_BASE}/status`);
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);

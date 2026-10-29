@@ -1,5 +1,6 @@
 export {
   fetchModels,
+  fetchEmbeddingModels,
   fetchLlmSettings,
   updateLlmSettings,
   search,
@@ -15,4 +16,5 @@ export type {
   StreamEvent,
   NodeStartData,
   NodeResultData,
+  StatusData,
 } from './client';

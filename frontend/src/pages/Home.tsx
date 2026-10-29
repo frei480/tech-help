@@ -1,23 +1,20 @@
 import { useCallback, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  fetchModels,
   fetchLlmSettings,
   ingest,
   status,
   streamSearch,
   updateLlmSettings,
-  type LlmModel,
   type LlmSettings,
   type SearchData,
   type StreamEvent,
   type NodeStartData,
   type NodeResultData,
+  type StatusData,
 } from '../api';
 import SearchResult from '../components/SearchResult';
 import SettingsPanel from '../components/SettingsPanel';
-
-type StatusData = { indexed_files: number; indexed_chunks: number } | Record<string, never>;
 
 /** A single trace entry for the processing pipeline display. */
 type TraceEntry = {
@@ -34,10 +31,8 @@ type TraceEntry = {
 export default function HomePage() {
   const qc = useQueryClient();
   const [query, setQuery] = useState('');
-  const [selectedModel, setSelectedModel] = useState<string>('');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [streamingTokens, setStreamingTokens] = useState<string | null>(null);
-  const [streamingReasoning, setStreamingReasoning] = useState<string | null>(null);
   const [traceEntries, setTraceEntries] = useState<TraceEntry[]>([]);
   const traceIdRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -46,20 +41,13 @@ export default function HomePage() {
     queryKey: ['status'],
     queryFn: status,
     retry: false,
+    refetchInterval: 2_000,
   });
 
   const { data: llmSettings } = useQuery<LlmSettings, Error>({
     queryKey: ['llm-settings'],
     queryFn: fetchLlmSettings,
     retry: false,
-  });
-
-  const { data: models = [] } = useQuery<LlmModel[], Error>({
-    queryKey: ['llm-models', llmSettings?.provider],
-    queryFn: () => fetchModels(llmSettings!.provider),
-    enabled: Boolean(llmSettings),
-    retry: false,
-    staleTime: 60_000,
   });
 
   const settingsMutation = useMutation({
@@ -73,8 +61,6 @@ export default function HomePage() {
 
   const isTokenEvent = (event: StreamEvent): event is Extract<StreamEvent, { event: 'token' }> =>
     event.event === 'token';
-  const isReasoningTokenEvent = (event: StreamEvent): event is Extract<StreamEvent, { event: 'reasoning_token' }> =>
-    event.event === 'reasoning_token';
   const isNodeStartEvent = (event: StreamEvent): event is Extract<StreamEvent, { event: 'node_start' }> =>
     event.event === 'node_start';
   const isNodeResultEvent = (event: StreamEvent): event is Extract<StreamEvent, { event: 'node_result' }> =>
@@ -117,16 +103,15 @@ export default function HomePage() {
   }, []);
 
   const runSearch = useCallback(
-    async ({ query, model }: { query: string; model?: string }) => {
+    async ({ query }: { query: string }) => {
       // Cancel previous stream if still active
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
       const controller = new AbortController();
       abortControllerRef.current = controller;
-
       setStreamingTokens(null);
-      setStreamingReasoning(null);
+      setStreamingTokens(null);
       setTraceEntries([]);
       traceIdRef.current = 0;
 
@@ -136,20 +121,17 @@ export default function HomePage() {
       };
 
       try {
-        for await (const event of streamSearch(query, 'ai_answer', model, controller.signal)) {
+        for await (const event of streamSearch(query, 'ai_answer', undefined, controller.signal)) {
           if (controller.signal.aborted) break;
 
           if (isTokenEvent(event)) {
             setStreamingTokens((current) => (current ?? '') + event.data.token);
-          } else if (isReasoningTokenEvent(event)) {
-            setStreamingReasoning((current) => (current ?? '') + event.data.token);
           } else if (isNodeStartEvent(event)) {
             addTraceStart(event.data);
           } else if (isNodeResultEvent(event)) {
             updateTraceResult(event.data);
           } else if (isDoneEvent(event)) {
             setStreamingTokens(null);
-            setStreamingReasoning(null);
             return event.data;
           } else if (isErrorEvent(event)) {
             throw new Error(event.data.message);
@@ -184,12 +166,13 @@ export default function HomePage() {
     (e: React.FormEvent) => {
       e.preventDefault();
       if (!query.trim()) return;
-      searchMutation.mutate({ query: query.trim(), model: selectedModel || undefined });
+      searchMutation.mutate({ query: query.trim() });
     },
-    [query, selectedModel, searchMutation]
+    [query, searchMutation]
   );
 
   const backendOk = !statusError;
+  const isIndexing = ingestMutation.isPending || statusData?.is_indexing === true;
 
   /** Human-readable node labels for the trace panel. */
   const nodeLabels: Record<string, string> = {
@@ -218,16 +201,17 @@ export default function HomePage() {
           <span className="badge">Backend: {backendOk ? 'connected' : 'offline'}</span>
           {backendOk && (
             <>
-              <span className="badge">Indexed files: {(statusData as StatusData | undefined)?.indexed_files ?? 0}</span>
-              <span className="badge">Chunks: {(statusData as StatusData | undefined)?.indexed_chunks ?? 0}</span>
+              <span className="badge">Indexed files: {statusData?.indexed_files ?? 0}</span>
+              <span className="badge">Chunks: {statusData?.indexed_chunks ?? 0}</span>
+              {isIndexing && <span className="badge">Indexing in progress</span>}
             </>
           )}
           <button
             className="secondary"
             onClick={() => ingestMutation.mutate()}
-            disabled={ingestMutation.isPending || !backendOk}
+            disabled={isIndexing || !backendOk}
           >
-            {ingestMutation.isPending ? 'Indexing...' : 'Run ingestion'}
+            {isIndexing ? 'Indexing...' : 'Run ingestion'}
           </button>
           <button
             className="settings-trigger secondary"
@@ -241,6 +225,10 @@ export default function HomePage() {
           </button>
         </div>
       </header>
+
+      {ingestMutation.error && (
+        <p className="empty">{ingestMutation.error.message}</p>
+      )}
 
       {settingsOpen && llmSettings && (
         <SettingsPanel
@@ -262,27 +250,10 @@ export default function HomePage() {
           placeholder="Ask about documentation..."
           disabled={searchMutation.isPending || !backendOk}
         />
-        <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)}>
-          <option value="">Default ({llmSettings?.chat_model ?? '...'})</option>
-          {models.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.name}
-            </option>
-          ))}
-        </select>
         <button type="submit" disabled={searchMutation.isPending || !backendOk}>
           {searchMutation.isPending ? 'Searching...' : 'Search'}
         </button>
       </form>
-
-      {streamingReasoning && (
-        <section className="result">
-          <article className="reasoning streaming">
-            <h3>Reasoning</h3>
-            <pre className="streaming-content streaming-active">{streamingReasoning}</pre>
-          </article>
-        </section>
-      )}
 
       {streamingTokens && (
         <section className="result">

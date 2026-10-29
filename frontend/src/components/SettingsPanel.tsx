@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { fetchModels, type LlmModel, type LlmSettings } from '../api';
+import { fetchEmbeddingModels, fetchModels, type LlmModel, type LlmSettings } from '../api';
 
 type SettingsPanelProps = {
   settings: LlmSettings;
@@ -18,11 +18,29 @@ export default function SettingsPanel({
   onSave,
 }: SettingsPanelProps) {
   const [draft, setDraft] = useState(settings);
-  const { data: models = [], isLoading, error: modelsError } = useQuery<LlmModel[], Error>({
+  const {
+    data: models = [],
+    isLoading: isLoadingModels,
+    error: modelsError,
+  } = useQuery<LlmModel[], Error>({
     queryKey: ['llm-models', draft.provider],
     queryFn: () => fetchModels(draft.provider),
     staleTime: 60_000,
   });
+  const {
+    data: openRouterEmbeddingModels = [],
+    isLoading: isLoadingEmbeddingModels,
+    error: embeddingModelsError,
+  } = useQuery<LlmModel[], Error>({
+    queryKey: ['llm-embedding-models', draft.provider],
+    queryFn: () => fetchEmbeddingModels(draft.provider),
+    enabled: draft.provider === 'openrouter',
+    staleTime: 60_000,
+  });
+  const embeddingModels =
+    draft.provider === 'openrouter' ? openRouterEmbeddingModels : models;
+  const isLoading =
+    isLoadingModels || (draft.provider === 'openrouter' && isLoadingEmbeddingModels);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -32,12 +50,12 @@ export default function SettingsPanel({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  const modelOptions = (selected: string) => (
+  const modelOptions = (selected: string, options: LlmModel[]) => (
     <>
-      {!models.some((model) => model.id === selected) && selected && (
+      {!options.some((model) => model.id === selected) && selected && (
         <option value={selected}>{selected} (current)</option>
       )}
-      {models.map((model) => (
+      {options.map((model) => (
         <option key={model.id} value={model.id}>
           {model.name}
         </option>
@@ -99,7 +117,7 @@ export default function SettingsPanel({
               }
               disabled={isLoading || models.length === 0}
             >
-              {modelOptions(draft.chat_model)}
+              {modelOptions(draft.chat_model, models)}
             </select>
           </label>
 
@@ -110,14 +128,17 @@ export default function SettingsPanel({
               onChange={(event) =>
                 setDraft((current) => ({ ...current, embedding_model: event.target.value }))
               }
-              disabled={isLoading || models.length === 0}
+              disabled={isLoading || embeddingModels.length === 0}
             >
-              {modelOptions(draft.embedding_model)}
+              {modelOptions(draft.embedding_model, embeddingModels)}
             </select>
           </label>
 
           {isLoading && <p className="settings-help">Loading models…</p>}
           {modelsError && <p className="settings-error">{modelsError.message}</p>}
+          {draft.provider === 'openrouter' && embeddingModelsError && (
+            <p className="settings-error">{embeddingModelsError.message}</p>
+          )}
           <p className="settings-help">
             Changing the embeddings model requires re-indexing your documents.
           </p>
@@ -127,7 +148,10 @@ export default function SettingsPanel({
             <button type="button" className="secondary" onClick={onClose} disabled={isSaving}>
               Cancel
             </button>
-            <button type="submit" disabled={isSaving || isLoading || models.length === 0}>
+            <button
+              type="submit"
+              disabled={isSaving || isLoading || models.length === 0 || embeddingModels.length === 0}
+            >
               {isSaving ? 'Saving…' : 'Save settings'}
             </button>
           </div>

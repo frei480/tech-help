@@ -1,6 +1,5 @@
 type SearchData = {
   answer: string | null;
-  reasoning_content?: string | null;
   chunks: Array<{
     text?: string;
     metadata?: Record<string, unknown>;
@@ -13,15 +12,6 @@ type Props = { data: SearchData };
 export default function SearchResult({ data }: Props) {
   return (
     <div>
-      {data.reasoning_content && (
-        <details className="reasoning reasoning-raw" open>
-          <summary>
-            <h4>Reasoning (chain-of-thought)</h4>
-          </summary>
-          <pre className="reasoning-raw-content">{data.reasoning_content}</pre>
-        </details>
-      )}
-
       {data.answer && (
         <article className="answer">
           <h3>Answer</h3>
