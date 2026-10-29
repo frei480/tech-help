@@ -14,8 +14,11 @@ Given a user query, generate up to 5 alternative search queries that would help 
 relevant documentation.
 
 Rules:
+- For a multi-part question, include concise search queries for its distinct subquestions
+  so each part can be researched separately.
 - Use technical synonyms, abbreviations, and alternative phrasings commonly used in PLM/EDMS/PDM domains
 - Keep each variant concise (2–8 words)
+- Keep every variant relevant to the user's question; do not add assumptions or unrelated topics
 - Return ONLY a valid JSON array of strings, no other text or markdown fences
 - If the query is already a short technical term, you may return an empty array
 

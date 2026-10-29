@@ -1,3 +1,4 @@
+import asyncio
 from typing import Any, TypedDict
 
 from langchain_core.tools import tool
@@ -8,7 +9,7 @@ from openai import AsyncOpenAI
 
 from app.config import settings
 from app.llm.prompts import build_prompt
-from app.search.file_loader import load_full_file_tool
+from app.search.file_loader import read_full_file
 from app.search.fusion import weighted_fusion
 from app.search.keyword_extractor import extract_keywords
 from app.search.query_expander import expand_query_cached
@@ -27,7 +28,6 @@ class GraphState(TypedDict):
     lexical_hits_pass2: list[dict[str, Any]]
     fused: list[dict[str, Any]]
     answer: str | None
-    reasoning_content: str | None
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -75,9 +75,6 @@ def _run_lexical_search(variants: list[str]) -> list[dict[str, Any]]:
     return all_hits
 
 
-# ─── Tools ────────────────────────────────────────────────────────────────────
-
-
 @tool
 def lexical_search_tool(query: str) -> list[dict[str, Any]]:
     """Lexical (keyword) search over documentation files using ripgrep.
@@ -98,10 +95,6 @@ def vector_search_tool(query: str) -> list[dict[str, Any]]:
         return VectorSearch().search(query, top_k=settings.fusion_top_k)
     except Exception:
         return []
-
-
-# Tools that the answer-generation LLM can invoke on its own
-_llm_tools = [load_full_file_tool]
 
 
 # ─── Graph nodes ──────────────────────────────────────────────────────────────
@@ -139,7 +132,7 @@ async def extract_keywords_from_vector(state: GraphState, *, writer: StreamWrite
             )
         )
         return {"extracted_keywords": []}
-    keywords = extract_keywords(state["vector_hits"])
+    keywords = await asyncio.to_thread(extract_keywords, state["vector_hits"])
     writer(("node_result", {"node": "extract_keywords_from_vector", "keywords": keywords}))
     return {"extracted_keywords": keywords}
 
@@ -184,7 +177,7 @@ async def extract_keywords_from_lexical(state: GraphState, *, writer: StreamWrit
             )
         )
         return {"lexical_keywords": []}
-    keywords = extract_keywords(state["lexical_hits_pass1"])
+    keywords = await asyncio.to_thread(extract_keywords, state["lexical_hits_pass1"])
     writer(("node_result", {"node": "extract_keywords_from_lexical", "keywords": keywords}))
     return {"lexical_keywords": keywords}
 
@@ -242,14 +235,12 @@ async def generate_answer(state: GraphState, *, writer: StreamWriter) -> GraphSt
     """Node: generate answer via streaming LLM call.
     Tokens are streamed to the client via LangGraph's ``StreamWriter``.
     The full answer is accumulated and stored in state.
-    Reasoning content (chain-of-thought) from reasoning models is also captured.
 
     Uses the OpenAI client directly (not LangChain's ChatOpenAI) to ensure
-    proper handling of vendor-specific delta fields like ``reasoning_content``
-    that LM Studio sends as a top-level field in the delta JSON.
+    proper handling of vendor-specific streaming behavior.
 
     For each chunk from the OpenAI stream, we emit a custom event via
-    ``StreamWriter`` with both ``content`` and ``reasoning_content`` tokens.
+    ``StreamWriter`` with answer content tokens.
     The ``routes.py`` endpoint uses ``stream_mode=["custom"]`` to receive
     these events and forward them to the client as SSE events.
     """
@@ -259,7 +250,23 @@ async def generate_answer(state: GraphState, *, writer: StreamWriter) -> GraphSt
         return {"answer": None}
 
     model_name = state.get("model") or settings.chat_model
-    prompt = build_prompt(state["query"], state["fused"], include_reasoning=False)
+    primary_source = state["fused"][0]
+    primary_rel_path = primary_source.get("metadata", {}).get("rel_path")
+    if not isinstance(primary_rel_path, str) or not primary_rel_path:
+        raise ValueError("The highest-ranked search result has no documentation file path.")
+    primary_document = await asyncio.to_thread(read_full_file, primary_rel_path)
+    context_chunks = [
+        {
+            **primary_source,
+            "text": primary_document,
+            "metadata": {
+                **primary_source.get("metadata", {}),
+                "full_document": True,
+            },
+        },
+        *state["fused"][1:],
+    ]
+    prompt = build_prompt(state["query"], context_chunks, include_reasoning=False)
 
     client = AsyncOpenAI(
         base_url=settings.llm_api_base_url,
@@ -267,9 +274,8 @@ async def generate_answer(state: GraphState, *, writer: StreamWriter) -> GraphSt
         timeout=300.0,
         max_retries=0,
     )
-
     full_content: list[str] = []
-    full_reasoning: list[str] = []
+    full_content: list[str] = []
 
     stream = await client.chat.completions.create(
         model=model_name,
@@ -284,39 +290,18 @@ async def generate_answer(state: GraphState, *, writer: StreamWriter) -> GraphSt
             continue
 
         content_token: str | None = None
-        reasoning_token: str | None = None
 
         # Regular content tokens
         if delta.content:
             content_token = delta.content
             full_content.append(content_token)
 
-        # Reasoning content tokens (vendor-specific field from LM Studio)
-        # This is a top-level field in the delta JSON. The OpenAI SDK's Delta
-        # object may expose it as a direct attribute or via model_extra.
-        reasoning = getattr(delta, "reasoning_content", None)
-        if reasoning is None:
-            reasoning = (
-                (delta.model_extra or {}).get("reasoning_content")
-                if hasattr(delta, "model_extra")
-                else None
-            )
-        if isinstance(reasoning, str) and reasoning:
-            reasoning_token = reasoning
-            full_reasoning.append(reasoning_token)
-
-        # Emit custom event via StreamWriter for real-time streaming.
-        # The routes.py endpoint picks these up via stream_mode=["custom"].
+        # Emit answer tokens via StreamWriter; internal reasoning is never forwarded.
         if content_token:
             writer(("token", content_token))
-        if reasoning_token:
-            writer(("reasoning_token", reasoning_token))
 
     writer(("node_result", {"node": "generate_answer"}))
-    return {
-        "answer": "".join(full_content) or None,
-        "reasoning_content": "".join(full_reasoning) or None,
-    }
+    return {"answer": "".join(full_content) or None}
 
 
 # ─── Graph definition ─────────────────────────────────────────────────────────

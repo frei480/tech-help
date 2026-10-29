@@ -20,7 +20,7 @@ Combines **semantic (vector)** and **lexical (keyword)** search with **LLM-power
 |---|---|
 | [`app/main.py`](backend/app/main.py) | FastAPI app entry point |
 | [`app/api/routes.py`](backend/app/api/routes.py) | REST & SSE endpoints: `/api/search`, `/api/search/stream`, `/api/ingest`, `/api/status`, `/api/files`, `/api/chunks` |
-| [`app/api/llm_router.py`](backend/app/api/llm_router.py) | `/api/llm/models` — fetch available models from the provider |
+| [`app/api/llm_router.py`](backend/app/api/llm_router.py) | `/api/llm/models` and `/api/llm/embedding-models` — fetch chat and embedding models |
 | [`app/graph.py`](backend/app/graph.py) | LangGraph state machine orchestrating the search pipeline |
 | [`app/config.py`](backend/app/config.py) | Pydantic-based settings (`.env`-aware) |
 | [`app/llm/prompts.py`](backend/app/llm/prompts.py) | System prompts for answer generation & reasoning |
@@ -44,7 +44,7 @@ Combines **semantic (vector)** and **lexical (keyword)** search with **LLM-power
 | [`src/api/client.ts`](frontend/src/api/client.ts) | API client: SSE streaming, REST calls |
 | [`src/api/index.ts`](frontend/src/api/index.ts) | Re-exports |
 | [`src/components/SearchResult.tsx`](frontend/src/components/SearchResult.tsx) | Displays answer + source chunks |
-| [`src/components/ProcessTrace.tsx`](frontend/src/components/ProcessTrace.tsx) | Shows reasoning summary, source notes, limitations, raw reasoning tokens |
+| [`src/components/ProcessTrace.tsx`](frontend/src/components/ProcessTrace.tsx) | Displays an answer and its supporting documentation chunks |
 | [`src/styles.css`](frontend/src/styles.css) | Dark theme styles |
 
 ## Search Pipeline (LangGraph)
@@ -63,8 +63,9 @@ normalize → vector_search → extract_keywords_v → lexical_search_p1
 5. **`extract_keywords_l`** — LLM extracts key terms from first lexical pass
 6. **`lexical_search_p2`** — second ripgrep pass with newly discovered keywords
 7. **`fuse`** — weighted fusion of all lexical + vector results
-8. **`answer`** — LLM generates answer from fused context (with access to `load_full_file_tool`)
-9. **`reasoning`** — LLM produces structured reasoning summary, source notes, and limitations
+8. **`answer`** — LLM reviews the retrieved context, checks each part of the question against the available evidence, and gives a detailed answer covering the relevant documented steps, conditions, and caveats, with citations. The corpus is local documentation only; the assistant states when the corpus cannot verify requested external or current information.
+
+Internal model reasoning is not sent to or displayed by the frontend.
 
 ## Quick Start
 
@@ -111,7 +112,6 @@ to models loaded in LM Studio.
 | `OPENROUTER_API_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter API base URL |
 | `OPENROUTER_API_KEY` | — | OpenRouter API key (required for OpenRouter) |
 | `CHAT_MODEL` | `qwen/qwen3.6-27b` | Model for answer generation |
-| `EMBEDDING_DIMENSIONS` | `768` | Embedding vector dimensions |
 | `EMBEDDING_MODEL` | `text-embedding-embeddinggemma-300m` | Model for embeddings |
 | `DOCS_ROOT` | `./docs` | Documentation files directory |
 | `CHROMA_PERSIST_DIR` | `./chroma_db` | ChromaDB persistence directory |

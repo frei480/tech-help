@@ -7,7 +7,6 @@ that very large files do not blow through the context window.
 """
 
 import os
-from pathlib import Path
 
 import tiktoken
 from langchain_core.tools import tool
@@ -20,6 +19,17 @@ _enc = tiktoken.get_encoding("o200k_base")
 
 def _count_tokens(text: str) -> int:
     return len(_enc.encode(text, disallowed_special=()))
+
+
+def read_full_file(rel_path: str) -> str:
+    """Read a complete documentation file without the LLM tool's token limit."""
+    docs_root = settings.docs_root.resolve()
+    file_path = (docs_root / rel_path).resolve()
+    if not file_path.is_relative_to(docs_root):
+        raise ValueError(f"Path '{rel_path}' is outside the docs directory.")
+    if not file_path.is_file():
+        raise FileNotFoundError(f"Documentation file '{rel_path}' was not found.")
+    return file_path.read_text(encoding="utf-8", errors="replace")
 
 
 @tool
@@ -38,23 +48,14 @@ def load_full_file_tool(rel_path: str) -> str:
         The full text of the file, or an error message if the file
         does not exist or cannot be read.
     """
-    docs_root: Path = settings.docs_root
-    file_path = docs_root / rel_path
-
-    # Security: prevent path traversal outside docs_root
     try:
-        file_path = file_path.resolve()
-        docs_root_resolved = docs_root.resolve()
-        if not str(file_path).startswith(str(docs_root_resolved)):
-            return f"Error: access denied — path '{rel_path}' is outside the docs directory."
-    except ValueError, OSError:
-        return f"Error: invalid path '{rel_path}'."
-
-    if not file_path.is_file():
-        return f"Error: file '{rel_path}' not found."
-
-    try:
-        text = file_path.read_text(encoding="utf-8", errors="replace")
+        text = read_full_file(rel_path)
+    except ValueError:
+        return f"Error: access denied — path '{rel_path}' is outside the docs directory."
+    except OSError as exc:
+        if isinstance(exc, FileNotFoundError):
+            return f"Error: file '{rel_path}' not found."
+        return f"Error reading '{rel_path}': {exc}"
     except Exception as exc:
         return f"Error reading '{rel_path}': {exc}"
 
