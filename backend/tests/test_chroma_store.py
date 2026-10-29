@@ -99,3 +99,36 @@ def test_collection_reset_on_dimension_mismatch() -> None:
 
     assert first_calls["count"] == 1
     assert second_calls["count"] == 1
+
+
+def test_bm25_search_reads_and_caches_indexed_documents(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = ChromaStore.__new__(ChromaStore)
+    calls = {"count": 0}
+
+    class Collection:
+        def get(self, include: list[str]) -> dict[str, list]:
+            calls["count"] += 1
+            return {
+                "documents": [
+                    "T-FLEX DOCs provides an API.",
+                    "T-FLEX DOCs uses a three-tier architecture.",
+                ],
+                "metadatas": [
+                    {"rel_path": "api.txt"},
+                    {"rel_path": "architecture.txt"},
+                ],
+            }
+
+    store.collection = Collection()
+    monkeypatch.setattr(ChromaStore, "_bm25_index", None)
+    monkeypatch.setattr(ChromaStore, "_bm25_cache_key", None)
+    monkeypatch.setattr(settings, "chroma_persist_dir", settings.chroma_persist_dir / "bm25-test")
+
+    hits = store.search_bm25("three-tier architecture")
+    cached_hits = store.search_bm25("three-tier architecture")
+
+    assert hits[0]["metadata"]["rel_path"] == "architecture.txt"
+    assert cached_hits == hits
+    assert calls["count"] == 1

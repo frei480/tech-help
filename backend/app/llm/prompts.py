@@ -59,7 +59,10 @@ def build_prompt(
         chunk_index = meta.get("chunk_index", 0)
         source_label = f"[{rel_path}:{chunk_index}]"
         if meta.get("full_document"):
-            source_label += " (complete document; highest-ranked source)"
+            source_label += " (complete document"
+            if meta.get("highest_ranked_source"):
+                source_label += "; highest-ranked source"
+            source_label += ")"
         context_parts.append(f"{source_label}\n{chunk.get('text', '')}")
 
     context = "\n\n---\n\n".join(context_parts)

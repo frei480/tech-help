@@ -1,5 +1,6 @@
 import uuid
-from typing import Any
+from threading import Lock
+from typing import Any, ClassVar
 
 
 import chromadb
@@ -8,9 +9,14 @@ from chromadb.errors import InvalidArgumentError
 
 from app.config import settings
 from app.ingestion.chunker import Chunk
+from app.search.bm25 import BM25Index
 
 
 class ChromaStore:
+    _bm25_index: ClassVar[BM25Index | None] = None
+    _bm25_cache_key: ClassVar[tuple[str, str] | None] = None
+    _bm25_cache_lock: ClassVar[Lock] = Lock()
+
     def __init__(self) -> None:
         self.client = chromadb.PersistentClient(
             path=str(settings.chroma_persist_dir),
@@ -30,6 +36,38 @@ class ChromaStore:
         except ValueError:
             pass
         self.collection = self._get_or_create_collection()
+        self._invalidate_bm25_cache()
+
+    @classmethod
+    def _invalidate_bm25_cache(cls) -> None:
+        with cls._bm25_cache_lock:
+            cls._bm25_index = None
+            cls._bm25_cache_key = None
+
+    def _get_bm25_index(self) -> BM25Index:
+        store_type = type(self)
+        cache_key = (
+            str(settings.chroma_persist_dir.resolve()),
+            settings.chroma_collection_name,
+        )
+        with store_type._bm25_cache_lock:
+            if (
+                store_type._bm25_index is None
+                or store_type._bm25_cache_key != cache_key
+            ):
+                results = self.collection.get(include=["documents", "metadatas"])
+                documents = results.get("documents") or []
+                metadatas = results.get("metadatas") or []
+                indexed_documents = [
+                    {"text": text, "metadata": metadata}
+                    for text, metadata in zip(documents, metadatas)
+                    if text is not None and metadata is not None
+                ]
+                store_type._bm25_index = BM25Index(indexed_documents)
+                store_type._bm25_cache_key = cache_key
+            if store_type._bm25_index is None:
+                raise RuntimeError("BM25 index was not initialized.")
+            return store_type._bm25_index
 
     def _add_with_collection_reset(self, **kwargs: Any) -> None:
         try:
@@ -102,6 +140,7 @@ class ChromaStore:
             documents=texts,
             metadatas=metadatas,
         )
+        self._invalidate_bm25_cache()
         return len(chunks)
 
     def search(self, query: str, top_k: int | None = None) -> list[dict[str, Any]]:
@@ -129,6 +168,10 @@ class ChromaStore:
             )
         return hits
 
+    def search_bm25(self, query: str, top_k: int | None = None) -> list[dict[str, Any]]:
+        top_k = top_k or settings.fusion_top_k
+        return self._get_bm25_index().search(query, top_k=top_k)
+
     def count(self) -> int:
         return self.collection.count()
 
@@ -139,3 +182,4 @@ class ChromaStore:
         )
         if matches["ids"]:
             self.collection.delete(ids=matches["ids"])
+        self._invalidate_bm25_cache()

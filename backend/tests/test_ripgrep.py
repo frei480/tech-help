@@ -18,6 +18,7 @@ def test_run_ripgrep_parses_windows_paths(monkeypatch, tmp_path: Path) -> None:
     }
 
     def fake_run(*args, **kwargs) -> subprocess.CompletedProcess[str]:
+        assert "--fixed-strings" in args[0]
         return subprocess.CompletedProcess(
             args=args[0],
             returncode=0,

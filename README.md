@@ -25,8 +25,9 @@ Combines **semantic (vector)** and **lexical (keyword)** search with **LLM-power
 | [`app/config.py`](backend/app/config.py) | Pydantic-based settings (`.env`-aware) |
 | [`app/llm/prompts.py`](backend/app/llm/prompts.py) | System prompts for answer generation & reasoning |
 | [`app/search/vector.py`](backend/app/search/vector.py) | Semantic search via ChromaDB |
+| [`app/search/bm25.py`](backend/app/search/bm25.py) | BM25 ranking over the indexed documentation corpus |
 | [`app/search/ripgrep.py`](backend/app/search/ripgrep.py) | Lexical search via ripgrep |
-| [`app/search/fusion.py`](backend/app/search/fusion.py) | Weighted fusion of lexical + vector results |
+| [`app/search/fusion.py`](backend/app/search/fusion.py) | Reciprocal Rank Fusion of BM25, lexical, and vector results |
 | [`app/search/query_expander.py`](backend/app/search/query_expander.py) | LLM-based query expansion with technical synonyms |
 | [`app/search/keyword_extractor.py`](backend/app/search/keyword_extractor.py) | LLM-based keyword extraction from retrieved chunks |
 | [`app/search/file_loader.py`](backend/app/search/file_loader.py) | Full-file loading tool (available to the answer LLM) |
@@ -52,18 +53,19 @@ Combines **semantic (vector)** and **lexical (keyword)** search with **LLM-power
 The search is a 9-node directed acyclic graph:
 
 ```
-normalize → vector_search → extract_keywords_v → lexical_search_p1
-    → extract_keywords_l → lexical_search_p2 → fuse → answer → reasoning → END
+normalize → vector_search → extract_keywords_v → bm25_search → lexical_search_p1
+    → extract_keywords_l → lexical_search_p2 → fuse → answer → END
 ```
 
 1. **`normalize`** — trims the query
 2. **`vector_search`** — semantic search via ChromaDB (embeddings from OpenAI-compatible API)
 3. **`extract_keywords_v`** — LLM extracts key terms from vector hits
-4. **`lexical_search_p1`** — ripgrep search using original query + LLM-expanded synonyms + vector keywords
-5. **`extract_keywords_l`** — LLM extracts key terms from first lexical pass
-6. **`lexical_search_p2`** — second ripgrep pass with newly discovered keywords
-7. **`fuse`** — weighted fusion of all lexical + vector results
-8. **`answer`** — LLM reviews the retrieved context, checks each part of the question against the available evidence, and gives a detailed answer covering the relevant documented steps, conditions, and caveats, with citations. The corpus is local documentation only; the assistant states when the corpus cannot verify requested external or current information.
+4. **`bm25_search`** — full-corpus BM25 search over indexed documentation chunks, using the original question and terms extracted from vector results
+5. **`lexical_search_p1`** — ripgrep search using original query + LLM-expanded synonyms + vector keywords
+6. **`extract_keywords_l`** — LLM extracts key terms from first lexical pass
+7. **`lexical_search_p2`** — second ripgrep pass with newly discovered keywords
+8. **`fuse`** — Reciprocal Rank Fusion of vector, BM25, and lexical results, deduplicated by source file
+9. **`answer`** — LLM reviews the retrieved context, loading complete text for up to `FULL_FILE_MAX_FILES` distinct top-ranked source files. It checks each part of the question against the available evidence and gives a detailed answer covering relevant documented steps, conditions, and caveats, with citations. The corpus is local documentation only; the assistant states when the corpus cannot verify requested external or current information.
 
 Internal model reasoning is not sent to or displayed by the frontend.
 
@@ -80,6 +82,12 @@ Internal model reasoning is not sent to or displayed by the frontend.
 cp .env.example .env
 # Edit .env to match your LLM provider
 docker compose up --build
+```
+
+After changing backend code, rebuild the backend image to apply the changes:
+
+```bash
+docker compose up --build -d backend
 ```
 
 ### Endpoints
@@ -115,6 +123,7 @@ to models loaded in LM Studio.
 | `EMBEDDING_MODEL` | `text-embedding-embeddinggemma-300m` | Model for embeddings |
 | `DOCS_ROOT` | `./docs` | Documentation files directory |
 | `CHROMA_PERSIST_DIR` | `./chroma_db` | ChromaDB persistence directory |
+| `FULL_FILE_MAX_FILES` | `3` | Maximum number of distinct top-ranked source files loaded in full for answer generation |
 | `NPM_CONFIG_REGISTRY` | — | npm mirror URL (required for Docker build) |
 | `PIP_INDEX_URL` | — | PyPI mirror URL (required for Docker build) |
 

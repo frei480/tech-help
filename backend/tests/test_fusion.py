@@ -1,6 +1,38 @@
-import pytest
+from app.search.fusion import reciprocal_rank_fusion, weighted_fusion
 
-from app.search.fusion import weighted_fusion
+
+def test_reciprocal_rank_fusion_rewards_cross_retriever_agreement() -> None:
+    vector_hits = [
+        {"text": "semantic result", "metadata": {"rel_path": "semantic.md"}},
+        {"text": "shared result", "metadata": {"rel_path": "shared.md"}},
+    ]
+    bm25_hits = [
+        {"text": "shared result", "metadata": {"rel_path": "shared.md"}},
+        {"text": "lexical result", "metadata": {"rel_path": "lexical.md"}},
+    ]
+
+    fused = reciprocal_rank_fusion([vector_hits, bm25_hits], top_k=3)
+
+    assert [hit["metadata"]["rel_path"] for hit in fused] == [
+        "shared.md",
+        "semantic.md",
+        "lexical.md",
+    ]
+    assert fused[0]["score"] > fused[1]["score"]
+
+
+def test_reciprocal_rank_fusion_deduplicates_paths_case_insensitively() -> None:
+    fused = reciprocal_rank_fusion(
+        [
+            [
+                {"text": "first", "metadata": {"rel_path": "Guide.md"}},
+                {"text": "duplicate", "metadata": {"rel_path": "guide.md"}},
+            ]
+        ]
+    )
+
+    assert len(fused) == 1
+    assert fused[0]["text"] == "first"
 
 
 def test_fusion_combines_lexical_and_vector() -> None:

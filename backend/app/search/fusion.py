@@ -3,6 +3,36 @@ from __future__ import annotations
 from typing import Any
 
 
+def reciprocal_rank_fusion(
+    rankings: list[list[dict[str, Any]]],
+    top_k: int = 10,
+    rank_constant: int = 60,
+) -> list[dict[str, Any]]:
+    """Fuse ranked retrieval lists by reciprocal rank, deduplicating by file."""
+    scores: dict[str, float] = {}
+    items: dict[str, dict[str, Any]] = {}
+
+    for ranking in rankings:
+        seen_in_ranking: set[str] = set()
+        for rank, item in enumerate(ranking, start=1):
+            metadata = item.get("metadata", {})
+            rel_path = metadata.get("rel_path")
+            if not isinstance(rel_path, str) or not rel_path:
+                continue
+            key = rel_path.replace("\\", "/").casefold()
+            if key in seen_in_ranking:
+                continue
+            seen_in_ranking.add(key)
+            scores[key] = scores.get(key, 0.0) + 1 / (rank_constant + rank)
+            items.setdefault(key, item)
+
+    ranked = sorted(scores, key=scores.__getitem__, reverse=True)
+    return [
+        {**items[key], "score": scores[key]}
+        for key in ranked[:top_k]
+    ]
+
+
 def weighted_fusion(
     lexical_hits: list[dict[str, Any]],
     vector_hits: list[dict[str, Any]],

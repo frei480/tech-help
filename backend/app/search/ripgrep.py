@@ -27,6 +27,7 @@ def run_ripgrep(
     cmd = [
         "rg",
         "--json",
+        "--fixed-strings",
         "-m",
         str(max_results),
         "--",
